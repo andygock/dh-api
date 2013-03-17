@@ -21,7 +21,7 @@ if (isset($opt['key'])) {
 	
 		$api_file = file_get_contents($opt['key']);
 		if ($api_file === false) {
-			echo "Count not read: '".$opt['key']."'\n";
+			print_error( "Count not read: '".$opt['key']."'\n" );
 			exit;
 		}
 		$api = trim($api_file);
@@ -29,7 +29,7 @@ if (isset($opt['key'])) {
 } else {
 	$api_file = file_get_contents(DEFAULT_API_KEY);
 	if ($api_file === false) {
-		echo "Count not read: '".$opt['key']."'\n";
+		print_error( "Count not read: '".$opt['key']."'\n" );
 		exit;
 	}	
 	$api = trim($api_file);
@@ -45,7 +45,7 @@ if (isset($opt['list']) || isset($opt['l'])) {
 } else if (isset($opt['add']) || isset($opt['a'])) {
 
 	if (!isset($opt['account'])) {
-		echo "Please select account using the --account option.\n";
+		print_error( "Please select account using the --account option.\n" );
 		exit;
 	}	
 
@@ -58,7 +58,7 @@ if (isset($opt['list']) || isset($opt['l'])) {
 		
 		$addresses = @file($input_file);
 		if (!$addresses) {
-			echo "Could not open list file '".$input_file."'\n";
+			print_error( "Could not open list file '".$input_file."'\n" );
 			exit;
 		}
 		
@@ -96,12 +96,12 @@ if (isset($opt['list']) || isset($opt['l'])) {
 		exit;	
 	}
 
-	echo "Incorrect syntax";
+	print_error( "Incorrect command line syntax" );
 	exit;
 
 } else if (isset($opt['clear'])) {
 	// clear all entries for a email account
-	echo "--clear is not implemented\n";
+	print_error( "--clear is not implemented\n" );
 	exit;
 	
 } else  {
@@ -139,7 +139,7 @@ function add_to_filter($myaddr, $address) {
 	$result = json_decode($result[0]);
 
 	if ($result->result == "error") {
-		echo "Error: " . $result->data . "\n";
+		print_error( "Error: " . $result->data . "\n" );
 		exit;
 	}
 	
@@ -147,7 +147,7 @@ function add_to_filter($myaddr, $address) {
 		echo "Added: $address\n";
 		return true;
 	} else {
-		echo "Error: " . $result->data . "\n";
+		print_error( "Error: " . $result->data . "\n" );
 		return false;
 	}
 	
@@ -164,7 +164,7 @@ function list_mail_filters() {
 	//var_dump($result);
 	
 	if ($result->result == "error") {
-		echo "Error: " . $result->data . "\n";
+		print_error( "Error: " . $result->data . "\n" );
 		exit;
 	}
 	
@@ -191,7 +191,7 @@ function get_filters() {
 	$result = json_decode($result[0]);
 	
 	if ($result->result == "error") {
-		echo "Error: " . $result->data . "\n";
+		print_error( "Error: " . $result->data . "\n" );
 		exit;
 	}
 	
@@ -208,4 +208,7 @@ function check_current($data, $account, $address, $action="", $value="") {
 	return false;
 }
 
+function print_error($msg) {
+	file_put_contents('php://stderr', $msg);
+}
 ?>
