@@ -118,6 +118,10 @@ function print_help() {
 	echo "  php " . basename(__FILE__) . " --list\n";
 	echo "  php " . basename(__FILE__) . " --add --account=bad@email.com --filter=bademail.com\n";
 	echo "  php " . basename(__FILE__) . " --add --account=bad@email.com --list-file=listfile.txt\n";
+	
+	echo "\nOptions:\n";
+	echo "  --api=APIKEY  Specify API key (16 chars)\n";
+	echo "  --api=KEYFILE File with API key inside. Filename not to be 16 chars)\n";
 	exit;
 }
 
