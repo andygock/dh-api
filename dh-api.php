@@ -36,7 +36,9 @@ if (isset($opt['key'])) {
 }
 
 if (isset($opt['list']) || isset($opt['l'])) {
-	echo "Retreiving current filters...\n";
+	if (!isset($opt['bare'])) {
+		echo "Retreiving current filters...\n";
+	}
 	list_mail_filters();
 	exit;
 	
