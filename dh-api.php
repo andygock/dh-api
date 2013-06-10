@@ -1,214 +1,354 @@
 <?php
 
-// CLI PHP script to batch add email filters via Dreamhost API
-// Run with --help switch to see command line options
-
-define("WGET_BIN","c:/cygwin/bin/wget.exe");
-define("SPAM_FOLDER","spam-filter");
-define("DEFAULT_API_KEY",".api_key");
-
-$opt = getopt("hla",array("add","email:","help","list","list-file:","account:","action:","value:","bare","filter:","clear","key:"));
-//var_dump($opt);
-
-// Obtain api key
-// If param is 16 char string, then assume it *is* the key.
-// Otherwise treat it as a key file.
-// If this switch is not supplied, read default key file
-if (isset($opt['key'])) {
-	if (strlen($opt['key']) == 16) {
-		$api = $opt['key'];
-	} else {
+class DreamApi {
+	private $api_key = "";
+	private $api_url = "https://api.dreamhost.com/";
+	private $uuid;
+	private $wget = "c:/cygwin/bin/wget.exe";
 	
-		$api_file = file_get_contents($opt['key']);
-		if ($api_file === false) {
-			print_error( "Count not read: '".$opt['key']."'\n" );
-			exit;
-		}
-		$api = trim($api_file);
-	}
-} else {
-	$api_file = file_get_contents(DEFAULT_API_KEY);
-	if ($api_file === false) {
-		print_error( "Count not read: '".$opt['key']."'\n" );
-		exit;
-	}	
-	$api = trim($api_file);
-}
-
-if (isset($opt['list']) || isset($opt['l'])) {
-	if (!isset($opt['bare'])) {
-		echo "Retreiving current filters...\n";
-	}
-	list_mail_filters();
-	exit;
+	private $commands = array();
 	
-} else if (isset($opt['add']) || isset($opt['a'])) {
-
-	if (!isset($opt['account'])) {
-		print_error( "Please select account using the --account option.\n" );
-		exit;
-	}	
-
-	if (isset($opt['list-file'])) {
-		echo "Adding filters from list file.\n";
-		$curr = get_filters();
-		
-		$myemail = trim($opt['account']);
-		$input_file = trim($opt['list-file']);
-		
-		$addresses = @file($input_file);
-		if (!$addresses) {
-			print_error( "Could not open list file '".$input_file."'\n" );
-			exit;
+	private $debug_level;
+	
+	private $dry_run = false;
+	var $show_exec;
+	
+	private $keys = array('action','action_value','address','contains','filter','filter_on','stop','rank');
+	
+	function set_dry_run($value=true) {
+		$this->dry_run = $value;
+	}
+	
+	function is_dry_run() {
+		return $this->dry_run;
+	}
+	
+	private function query($data) {
+		$output = array();
+		$data = array_merge(array("key"=>$this->api_key,"format"=>"php"), $data);
+		$exec_str = $this->wget . " -qO- --no-check-certificate \"https://api.dreamhost.com/?" . http_build_query($data);
+		if ($this->show_exec) {
+			fwrite(STDERR, "EXEC: ".$exec_str."\n");
 		}
-		
-		//echo "Read " . count($addresses) . " lines from list file.\n";
-		
-		foreach ($addresses as $addr) {
-			$addr = trim($addr);
-			
-			if (strpos($addr,"#") === 0) {
-				// comment line - ignore
-				continue;
+		exec($exec_str, $output);
+		$result = unserialize($output[0]);
+		if ($result['result'] != "success") {
+			if (isset($result['data'])) {
+				fwrite(STDERR,"Error data: ".$result['data']."\n");
 			}
-			
-			// we should check if filter already exists, before adding it
-			// do later!
-			
-			if (! check_current($curr, $myemail, $addr)) {
-				
-				if (! add_to_filter($myemail, $addr) ) {
-					echo "Script terminated.\n";
-					exit;
+			if (isset($result['reason'])) {
+				fwrite(STDERR,"Error reason ".$result['reason']."\n");
+			}
+		}
+		return $result;
+	}
+	
+	function get_accessible_commands() {
+		$result = $this->query(array("cmd"=>"api-list_accessible_cmds"));
+		
+		if ($result['result'] == "success") {
+			foreach ($result['data'] as $cmd) {
+				foreach ($cmd as $key=>$val) {
+					//print $key.'='.$val." ";
+					if ($key == "cmd") {
+						$this->commands[] = $val;
+					}
 				}
-				
-			} else {
-				echo $addr.": skipping... (already exists)\n";
+			}
+		}
+	}
+	
+	function mail_list_filters() {
+		$result = $this->query(array('cmd'=>'mail-list_filters'));
+		
+		if ($result['result'] != "success") {
+			fwrite(STDERR, $result['data']."\n");
+			//var_dump($result);
+			exit();
+		}
+		
+		//var_dump($result['data']);
+		sort($result['data']);
+		$this->email_filters = $result['data'];
+		//$this->mail_print_filters();
+		return true;
+	}
+	
+	function mail_print_filters() {
+		if (!isset($this->email_filters)) {
+			return false;
+		}
+		foreach ($this->email_filters as $d) {
+			print urldecode(http_build_query($d,"","|"))."\n";
+		}		
+		return true;
+	}
+	
+	// add filter if filter does not already exist
+	function mail_add_filter($data) {
+		// e.g
+		// check whether filter already exists in $this->email_filters
+		
+		if (!isset($this->email_filters)) {
+			return false;
+		}
+		
+		$filter_was_matched = false;
+
+		// check whether all keys match
+		foreach ($this->email_filters as $d) {
+			// go through each of existing filters, and see if any
+			// matches $data
+			$matches = 0;
+			foreach ($this->keys as $check_key) {
+				if ($check_key == "rank") { // ignore "rank" when comparing
+					continue;
+				}
+				if (!array_key_exists($check_key,$data) || !array_key_exists($check_key,$d)) {
+					//var_dump($data);
+					//var_dump($d);
+					throw new Exception("Invalid function parameter to mail_add_filter(). Key not set.");
+					exit();
+				}
+				if ($data[$check_key] == $d[$check_key]) {
+					$matches++;
+				}
+			}
+			if ($matches == (count($this->keys)-1)) { // one less than count, as we ignore "rank" key
+				// found a match
+				$filter_was_matched = true;
+				break;
 			}
 		}
 		
-		exit;	
-	}
-	
-	if (isset($opt['filter'])) {
-		//echo "Adding: " . trim($opt['filter']) . "\n";
-		add_to_filter($opt['account'], trim($opt['filter']));
-		exit;	
-	}
-
-	print_error( "Incorrect command line syntax" );
-	exit;
-
-} else if (isset($opt['clear'])) {
-	// clear all entries for a email account
-	print_error( "--clear is not implemented\n" );
-	exit;
-	
-} else  {
-	print_help();
-	exit;
-}
-
-exit;
-
-function print_help() {
-	echo "CLI Syntax: \n";
-	echo "  php " . basename(__FILE__) . " [OPTIONS]\n";
-	
-	echo "Example:\n";
-	echo "  php " . basename(__FILE__) . " --help\n";
-	echo "  php " . basename(__FILE__) . " --list\n";
-	echo "  php " . basename(__FILE__) . " --add --account=bad@email.com --filter=bademail.com\n";
-	echo "  php " . basename(__FILE__) . " --add --account=bad@email.com --list-file=listfile.txt\n";
-	
-	echo "\nOptions:\n";
-	echo "  --api=APIKEY  Specify API key (16 chars)\n";
-	echo "  --api=KEYFILE File with API key inside. Filename not to be 16 chars)\n";
-	exit;
-}
-
-function add_to_filter($myaddr, $address) {
-	global $opt, $api;
-	$result = array();
-	if (isset($opt['action']) && isset($opt['value'])) {
-		$url = "format=json&key=".$api."&cmd=mail-add_filter&rank=0&address=".$myaddr."&filter_on=from&action=".urlencode($opt['action'])."&action_value=".urlencode($opt['value'])."&filter=".$address;	
-	} else {
-		$url = "format=json&key=".$api."&cmd=mail-add_filter&rank=0&address=".$myaddr."&filter_on=from&action=move&action_value=".SPAM_FOLDER."&filter=".$address;
-	}
-	exec(WGET_BIN . " -qO- --no-check-certificate \"https://api.dreamhost.com/?".$url."\"", $result);
-	$result = json_decode($result[0]);
-
-	if ($result->result == "error") {
-		print_error( "Error: " . $result->data . "\n" );
-		exit;
-	}
-	
-	if ($result->result == "success") {
-		echo "Added: $address\n";
+		if ($filter_was_matched) {
+			// filter already exists
+		} else {
+			// filter does not exist on remote server, add it (ignore account_id and rank key)
+			print "ADD ".$this->mail_formatted_filter($data)."\n";
+			if (!$this->dry_run) {
+				foreach ($this->keys as $k) {
+					$new_data[$k] = $data[$k];
+				}
+				$new_data = array_merge(array('cmd'=>'mail-add_filter'), $new_data);	
+				$result = $this->query($new_data);
+				if (!array_key_exists('result', $result)) {
+					var_dump($result);
+					throw new Exception("mail-add_filter command returned invalid result");
+					exit();
+				}
+				if ($result['result'] != 'success') {
+					if (isset($result['data'])) {
+						print "ERROR OCCURED: ".$result['data']."\n";
+					} else {
+						var_dump($result);
+						throw new Exception("Invalid response from server");
+						exit();
+					}
+					
+					return false;
+				} else {
+					return true;
+				}
+			}
+		}
+		
 		return true;
-	} else {
-		print_error( "Error: " . $result->data . "\n" );
+		
+	}
+	
+	function mail_delete_filter($data) {
+		print "DELETE ".$this->mail_formatted_filter($data)."\n";		
+		if (!$this->dry_run) {
+			foreach ($this->keys as $k) {
+				$new_data[$k] = $data[$k];
+			}
+			if (!array_key_exists("rank", $new_data) || !array_key_exists("rank", $data)) {
+				throw new Exception("Missing rank key.");
+			}
+			//$new_data["rank"] = $data["rank"]; // need rank key for delete command
+			$new_data = array_merge(array('cmd'=>'mail-remove_filter'), $new_data);
+			$result = $this->query($new_data);
+			if (!array_key_exists('result', $result)) {
+				throw new Exception("mail-add_filter command returned invalid result");
+			}			
+			if ($result['result'] != 'success') {
+				if (isset($result['data'])) {
+					print "ERROR OCCURED: ".$result['data']."\n";
+				} else {
+					var_dump($result);
+					throw new Exception("Invalid response from server");
+					exit();
+				}
+				return false;
+			} else {
+				return true;
+			}
+		}		
+	}
+	
+	function mail_sync_filters_add() {
+		if (!isset($this->email_filters) || !isset($this->new_filters)) {
+			return false;
+		}
+		foreach ($this->new_filters as $f) {
+			//print "About to add new filter:\n";
+			//var_dump($f);
+			$this->mail_add_filter($f);
+		}
+		return true;
+	}
+	
+	// delete filters that are in $this->email_filters, but not in $this->new_filters
+	// (a bit like array_merge)
+	function mail_sync_filters_delete() {
+		if (!isset($this->email_filters) || !isset($this->new_filters)) {
+			return false;
+		}
+		foreach ($this->email_filters as $filter_existing) {
+			//print "About to add new filter:\n";
+			//var_dump($f);
+			if ( !$this->mail_matching_filter($filter_existing, $this->new_filters, $this->keys) ) {
+				// no matches, we can delete
+				$this->mail_delete_filter($filter_existing);
+					
+			}
+		}		
+	}
+	
+	function mail_matching_filter($needle, $haystack_array, $keys) {
+		$keys = array_diff($keys, array("rank")); // don't compare "rank", ignore this key
+		
+		foreach ($haystack_array as $a2) {
+			$matches = 0;
+			foreach ($keys as $k) {
+				if ($needle[$k] == $a2[$k]) {
+					$matches++;
+				}
+			}
+			if ($matches == count($keys)) {
+				// we have a match
+				return true;
+			}
+		}
+		// no match found
 		return false;
 	}
-	
-}
 
-function list_mail_filters() {
-	global $opt, $api;
-	
-	$result = array();
-	$url = "format=json&key=".$api."&cmd=mail-list_filters";
-	exec(WGET_BIN . " -qO- --no-check-certificate \"https://api.dreamhost.com/?".$url."\"", $result);
-	$result = json_decode($result[0]);
-	
-	//var_dump($result);
-	
-	if ($result->result == "error") {
-		print_error( "Error: " . $result->data . "\n" );
-		exit;
+	function mail_formatted_filter($filter) {
+		return urldecode(http_build_query($filter,"","|"));
 	}
 	
-	foreach ($result->data as $data) {
-		if (isset($opt['account'])) {
-			if ($opt['account'] != $data->address) {
+	// read filter file into $this->new_filters
+	function mail_read_filter_file($filename) {
+		$this->new_filters = array();
+		$file = @fopen($filename,'r');
+		if (!$file) {
+			print "Could not open \"".$filename."\"\n";
+			return false;
+		}
+		while( $line = fgets($file) ) {
+			if (trim($line) == "") {
 				continue;
 			}
+			
+			$data = array();
+			//print $line;
+			parse_str(str_replace("|","&",rtrim($line)), $data);
+			//var_dump($data);
+			$this->new_filters[] = $data;
 		}
-		if (isset($opt['bare'])) {
-			echo $data->filter . "\n";	
-		} else {
-			echo "to:" . $data->address . ' ' . $data->filter_on . ":" . $data->filter . "\n";	
-		}
+		return true;
 	}
+	
+	function mail_print_filter_file() {
+		if (!isset($this->new_filters)) {
+			return false;
+		}
+		if (!is_array($this->new_filters)) {
+			return false;
+		}
+		
+		foreach ($this->new_filters as $d) {
+			print $this->mail_formatted_filter($d)."\n";
+		}
+		return true;
+	}
+	
+	/**
+	 * Print help screen for command line parameters
+	 * @return type
+	 */
+	function print_help() {
+		
+		return;
+	}
+	
 }
 
-function get_filters() {
-	global $api;
-	$result = array();
-	$url = "format=json&key=".$api."&cmd=mail-list_filters";
-	exec(WGET_BIN . " -qO- --no-check-certificate \"https://api.dreamhost.com/?".$url."\"", $result);
-	
-	$result = json_decode($result[0]);
-	
-	if ($result->result == "error") {
-		print_error( "Error: " . $result->data . "\n" );
+$opts = getopt("li:sh",array("list","input:","sync","dry-run","dry","exec","help"));
+//var_dump($opts);
+
+$dream = new DreamApi();
+
+if (array_key_exists("help", $opts) || array_key_exists("h", $opts)) {
+	print "dh-api.php [OPTIONS] COMMAND\n";
+	print "\nCommands:\n";
+	print "\t-s, --sync\n";
+	print "\t-l, --list\n";
+	print "\t-h, --help\n";
+	print "\nOptions:\n";
+	print "\t-i, --input\n";
+	print "\t--dry, --dry-run\n";
+	print "\t--exec\n";
+	exit();
+}
+
+if (array_key_exists("exec", $opts)) {
+	$dream->show_exec = true;
+}
+		
+if (array_key_exists("list", $opts) || array_key_exists("l", $opts)) {
+	fwrite(STDERR, "Listing existing mail filters from remote server...\n");
+	$dream->mail_list_filters();
+	$dream->mail_print_filters();
+	fwrite(STDERR, "Listed ".count($dream->email_filters)." lines.\n");
+	exit;
+}
+
+if (array_key_exists("dry-run", $opts) || array_key_exists("dry", $opts)) {
+	$dream->set_dry_run(true);
+}
+
+if (array_key_exists("s", $opts) || array_key_exists("sync", $opts)) {
+	if (array_key_exists("i", $opts)) {
+		$filename = $opts['i'];
+	}
+	if (array_key_exists("input", $opts)) {
+		$filename = $opts['input'];
+	}
+	if (!isset($filename)) {
+		print "No input filter list was supplied. Use the --input=FILE option.\n";
 		exit;
 	}
 	
-	return $result;
-}
-
-function check_current($data, $account, $address, $action="", $value="") {
-
-	foreach ($data->data as $filter) {
-		if ( ($filter->address === $account) && ($filter->filter === $address) && ($filter->filter_on == "from") && ($filter->action == "move") ) {
-			return true;
-		}
+	if ( !$dream->mail_read_filter_file($filename) ) {
+		// could not read file, error message displayed inside the function
+		exit;
 	}
-	return false;
+	//$dream->mail_print_filter_file();
+	
+	// sync with both ADD and DELETE
+	if ($dream->is_dry_run()) {
+		print "Dry run...\n";
+	}
+	fwrite(STDERR, "Reading existing mail filters from remote server...\n");
+	$dream->mail_list_filters();
+	fwrite(STDERR, "Read ".count($dream->email_filters)." entries.\n");
+	fwrite(STDERR, "Performing sync...\n");
+	$dream->mail_sync_filters_add();
+	$dream->mail_sync_filters_delete();
+	fwrite(STDERR, "Completed.\n");
 }
 
-function print_error($msg) {
-	file_put_contents('php://stderr', $msg);
-}
 ?>
