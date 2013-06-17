@@ -340,8 +340,8 @@ if (array_key_exists("s", $opts) || array_key_exists("sync", $opts)) {
 	$dream->mail_list_filters();
 	fwrite(STDERR, "Read ".count($dream->email_filters)." entries.\n");
 	fwrite(STDERR, "Performing sync...\n");
-	$dream->mail_sync_filters_add();
 	$dream->mail_sync_filters_delete();
+	$dream->mail_sync_filters_add();
 	fwrite(STDERR, "Completed.\n");
 }
 
