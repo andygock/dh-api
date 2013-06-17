@@ -1,5 +1,7 @@
 <?php
 
+// Dreamhost API interface
+
 class DreamApi {
 	private $api_key = "";
 	private $api_url = "https://api.dreamhost.com/";
@@ -14,6 +16,10 @@ class DreamApi {
 	var $show_exec;
 	
 	private $keys = array('action','action_value','address','contains','filter','filter_on','stop','rank');
+	
+	function set_api_key($key) {
+		$this->api_key = trim($key);
+	}
 	
 	function set_dry_run($value=true) {
 		$this->dry_run = $value;
@@ -32,12 +38,19 @@ class DreamApi {
 		}
 		exec($exec_str, $output);
 		$result = unserialize($output[0]);
+		if (!isset($result['result'])) {
+			fwrite(STDERR,"Error: API server didn't return a result field.\n");
+			exit(); // fatal error, should quit right away
+		}
 		if ($result['result'] != "success") {
+			if ($result['result'] == "error") {
+				fwrite(STDERR,"Error occured.\n");
+			}
 			if (isset($result['data'])) {
 				fwrite(STDERR,"Error data: ".$result['data']."\n");
 			}
 			if (isset($result['reason'])) {
-				fwrite(STDERR,"Error reason ".$result['reason']."\n");
+				fwrite(STDERR,"Error reason: ".$result['reason']."\n");
 			}
 		}
 		return $result;
@@ -62,15 +75,11 @@ class DreamApi {
 		$result = $this->query(array('cmd'=>'mail-list_filters'));
 		
 		if ($result['result'] != "success") {
-			fwrite(STDERR, $result['data']."\n");
-			//var_dump($result);
 			exit();
 		}
 		
-		//var_dump($result['data']);
 		sort($result['data']);
 		$this->email_filters = $result['data'];
-		//$this->mail_print_filters();
 		return true;
 	}
 	
@@ -105,8 +114,6 @@ class DreamApi {
 					continue;
 				}
 				if (!array_key_exists($check_key,$data) || !array_key_exists($check_key,$d)) {
-					//var_dump($data);
-					//var_dump($d);
 					throw new Exception("Invalid function parameter to mail_add_filter(). Key not set.");
 					exit();
 				}
@@ -138,23 +145,13 @@ class DreamApi {
 					exit();
 				}
 				if ($result['result'] != 'success') {
-					if (isset($result['data'])) {
-						print "ERROR OCCURED: ".$result['data']."\n";
-					} else {
-						var_dump($result);
-						throw new Exception("Invalid response from server");
-						exit();
-					}
-					
-					return false;
+					exit();
 				} else {
 					return true;
 				}
 			}
 		}
-		
 		return true;
-		
 	}
 	
 	function mail_delete_filter($data) {
@@ -166,24 +163,15 @@ class DreamApi {
 			if (!array_key_exists("rank", $new_data) || !array_key_exists("rank", $data)) {
 				throw new Exception("Missing rank key.");
 			}
-			//$new_data["rank"] = $data["rank"]; // need rank key for delete command
 			$new_data = array_merge(array('cmd'=>'mail-remove_filter'), $new_data);
 			$result = $this->query($new_data);
 			if (!array_key_exists('result', $result)) {
 				throw new Exception("mail-add_filter command returned invalid result");
-			}			
+			}	
 			if ($result['result'] != 'success') {
-				if (isset($result['data'])) {
-					print "ERROR OCCURED: ".$result['data']."\n";
-				} else {
-					var_dump($result);
-					throw new Exception("Invalid response from server");
-					exit();
-				}
-				return false;
-			} else {
-				return true;
+				exit();
 			}
+			return true;
 		}		
 	}
 	
@@ -192,8 +180,6 @@ class DreamApi {
 			return false;
 		}
 		foreach ($this->new_filters as $f) {
-			//print "About to add new filter:\n";
-			//var_dump($f);
 			$this->mail_add_filter($f);
 		}
 		return true;
@@ -206,12 +192,9 @@ class DreamApi {
 			return false;
 		}
 		foreach ($this->email_filters as $filter_existing) {
-			//print "About to add new filter:\n";
-			//var_dump($f);
 			if ( !$this->mail_matching_filter($filter_existing, $this->new_filters, $this->keys) ) {
 				// no matches, we can delete
 				$this->mail_delete_filter($filter_existing);
-					
 			}
 		}		
 	}
@@ -251,11 +234,8 @@ class DreamApi {
 			if (trim($line) == "") {
 				continue;
 			}
-			
 			$data = array();
-			//print $line;
 			parse_str(str_replace("|","&",rtrim($line)), $data);
-			//var_dump($data);
 			$this->new_filters[] = $data;
 		}
 		return true;
@@ -275,21 +255,15 @@ class DreamApi {
 		return true;
 	}
 	
-	/**
-	 * Print help screen for command line parameters
-	 * @return type
-	 */
-	function print_help() {
-		
-		return;
-	}
-	
 }
 
 $opts = getopt("li:sh",array("list","input:","sync","dry-run","dry","exec","help"));
 //var_dump($opts);
 
-$dream = new DreamApi();
+
+if (count($opts) == 0) {
+	$opts['help'] = 1;
+}
 
 if (array_key_exists("help", $opts) || array_key_exists("h", $opts)) {
 	print "dh-api.php [OPTIONS] COMMAND\n";
@@ -303,6 +277,23 @@ if (array_key_exists("help", $opts) || array_key_exists("h", $opts)) {
 	print "\t--exec\n";
 	exit();
 }
+
+
+$dream = new DreamApi();
+
+// Look for API key
+if ($file = fopen(".api_key","r")) {
+	$key = fgets($file,128);
+	if (!$key) {
+		fwrite(STDERR, "Could not read .api_key\n");
+		exit();		
+	}		
+	$dream->set_api_key($key);
+} else {
+	fwrite(STDERR, "Could not open .api_key\n");
+	exit();
+}
+
 
 if (array_key_exists("exec", $opts)) {
 	$dream->show_exec = true;
@@ -323,13 +314,16 @@ if (array_key_exists("dry-run", $opts) || array_key_exists("dry", $opts)) {
 if (array_key_exists("s", $opts) || array_key_exists("sync", $opts)) {
 	if (array_key_exists("i", $opts)) {
 		$filename = $opts['i'];
-	}
-	if (array_key_exists("input", $opts)) {
+	} else if (array_key_exists("input", $opts)) {
 		$filename = $opts['input'];
-	}
-	if (!isset($filename)) {
-		print "No input filter list was supplied. Use the --input=FILE option.\n";
-		exit;
+	} else {
+		// look for 'list.txt'
+		if ($fp = fopen("list.txt","r")) {
+			$filename = "list.txt";
+		} else {
+			print "No input filter list or list.txt was supplied. Try using --input=FILE option.\n";
+			exit();
+		}
 	}
 	
 	if ( !$dream->mail_read_filter_file($filename) ) {
