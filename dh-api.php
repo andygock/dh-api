@@ -6,7 +6,7 @@ class DreamApi {
 	private $api_key = "";
 	private $api_url = "https://api.dreamhost.com/";
 	private $uuid;
-	private $wget = "c:/cygwin/bin/wget.exe";
+	private $wget = "c:/cygwin64/bin/wget.exe";
 	
 	private $commands = array();
 	
@@ -36,7 +36,12 @@ class DreamApi {
 		if ($this->show_exec) {
 			fwrite(STDERR, "EXEC: ".$exec_str."\n");
 		}
+		//echo $exec_str;
 		exec($exec_str, $output);
+		if (count($output)==0) {
+			fwrite(STDERR,"API server did not respond.\n");
+			exit();
+		}
 		$result = unserialize($output[0]);
 		if (!isset($result['result'])) {
 			fwrite(STDERR,"Error: API server didn't return a result field.\n");
