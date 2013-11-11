@@ -227,7 +227,7 @@ class DreamApi {
 	}
 	
 	function mail_matching_filter($needle, $haystack_array, $keys) {
-		$keys = array_diff($keys, array("rank")); // don't compare "rank", ignore this key
+		$keys = array_diff($keys, array("rank","account_id")); // don't compare "rank" or "account_id", ignore this key
 		
 		foreach ($haystack_array as $a2) {
 			$matches = 0;
@@ -254,7 +254,7 @@ class DreamApi {
 		$this->new_filters = array();
 		$file = @fopen($filename,'r');
 		if (!$file) {
-			print "Could not open \"".$filename."\"\n";
+			fwrite(STDERR, "Could not open \"".$filename."\"\n");
 			return false;
 		}
 		while( $line = fgets($file) ) {
@@ -281,18 +281,75 @@ class DreamApi {
 		}
 		return true;
 	}
+
+	function add_to_list() {
+
+		// look for 'add.txt', which contains email filters to add into list.txt
+		if (!is_file('add.txt')) {
+			fwrite(STDERR, "Could not find 'add.txt'\n");
+			return;
+		}
+
+		$file = @fopen('add.txt','r');
+		if (!$file) {
+			fwrite(STDERR, "Could not open 'add.txt'\n");
+			return;
+		}
+
+		$email = "";
+		while( $line = fgets($file) ) {
+			$line = trim($line);
+
+			if ( preg_match("/^#/",$line) ) {
+				// comment line
+				continue;
+			}
+
+			if ( preg_match("/^$/", $line) ) {
+				// empty line
+				continue;
+			}
+
+			// look for email address header
+			$matches = array();
+			if ( preg_match("/^==(.*)==$/", $line, $matches) ) {
+				// grab email address from header line
+				$email = trim($matches[1]);
+				continue;
+			}
+
+			// format:
+			// account_id=467273|action=move|action_value=spam-filter|address=andy@andygock.com.au|contains=yes|filter=@advertisewithseo.com|filter_on=from|rank=36|stop=yes
+
+			$filter = $line;
+
+			// line must contain a email address (or part of one) to filter, use rank=1
+			// not sure if we need account_id value, i've removed it for now
+
+			if ($email != "") {
+				echo "action=move|action_value=spam-filter|address=".$email."|contains=yes|filter=".$filter."|filter_on=from|rank=1|stop=yes\n";
+			}
+		}
+
+	}
 	
 }
 
-$opts = getopt("li:sh",array("list","input:","sync","dry-run","dry","exec","help"));
+////////////////////////////////
+// SCRIPT STARTS HERE
+
+// command line options
+$opts = getopt("li:sh",array("list","input:","sync","dry-run","dry","exec","help","add-to-list"));
+
 //var_dump($opts);
 
-
 if (count($opts) == 0) {
+	// if no options given, we want to display help message
 	$opts['help'] = 1;
 }
 
 if (array_key_exists("help", $opts) || array_key_exists("h", $opts)) {
+	// display help message
 	print "dh-api.php [OPTIONS] COMMAND\n";
 	print "\nCommands:\n";
 	print "\t-s, --sync\n";
@@ -302,9 +359,9 @@ if (array_key_exists("help", $opts) || array_key_exists("h", $opts)) {
 	print "\t-i, --input\n";
 	print "\t--dry, --dry-run\n";
 	print "\t--exec\n";
+	print "\t--add-to-list\n";
 	exit();
 }
-
 
 $dream = new DreamApi();
 
@@ -325,13 +382,18 @@ if ($file = fopen(".api_key","r")) {
 if (array_key_exists("exec", $opts)) {
 	$dream->show_exec = true;
 }
+
+if (array_key_exists("add-to-list", $opts)) {
+	$dream->add_to_list();
+	exit();
+}
 		
 if (array_key_exists("list", $opts) || array_key_exists("l", $opts)) {
 	fwrite(STDERR, "Listing existing mail filters from remote server...\n");
 	$dream->mail_list_filters();
 	$dream->mail_print_filters();
 	fwrite(STDERR, "Listed ".count($dream->email_filters)." lines.\n");
-	exit;
+	exit();
 }
 
 if (array_key_exists("dry-run", $opts) || array_key_exists("dry", $opts)) {

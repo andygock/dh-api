@@ -25,3 +25,20 @@ Actually perform the sync
 See help, and all options:
 
 	php dh-api.php --help
+
+Quick add of email filters (must have `add.txt`):
+
+	php dh-api.php --list > list.txt
+	php dh-api.php --add-to-list >> list.txt
+	php dh-api.php --sync --dry
+	php dh-api.php --sync
+
+Format of `add.txt`:
+
+	# Additions
+	# These add to filter.txt, as email filter in the FROM field
+
+	==andy@andygock.com.au==
+	organichosting
+	groomingtechnologies.com
+
