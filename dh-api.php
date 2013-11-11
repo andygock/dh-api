@@ -6,7 +6,9 @@ class DreamApi {
 	private $api_key = "";
 	private $api_url = "https://api.dreamhost.com/";
 	private $uuid;
+
 	private $wget = "c:/cygwin/bin/wget.exe";
+	private $curl = "curl";
 	
 	private $commands = array();
 	
@@ -30,14 +32,32 @@ class DreamApi {
 	}
 	
 	private function query($data) {
-		$output = array();
+		$output = array(); // store output from dreamhost server here
+
+		// data to use in query string to API server
 		$data = array_merge(array("key"=>$this->api_key,"format"=>"php"), $data);
-		$exec_str = $this->wget . " -qO- --no-check-certificate \"https://api.dreamhost.com/?" . http_build_query($data);
+
+		// full url to GET
+		$url = "https://api.dreamhost.com/?".http_build_query($data);
+
+		if (strstr(php_uname(),"Darwin")) {
+			// MAC ODS X
+			// use curl
+			$exec_str = $this->curl . " -s '".$url."'";
+		} else {
+			// Other OS
+			// Use wget
+			$exec_str = $this->wget . " -qO- --no-check-certificate '".$url."'";
+		}
+
 		if ($this->show_exec) {
 			fwrite(STDERR, "EXEC: ".$exec_str."\n");
 		}
+
+		// execute the command string
 		exec($exec_str, $output);
 		$result = unserialize($output[0]);
+
 		if (!isset($result['result'])) {
 			fwrite(STDERR,"Error: API server didn't return a result field.\n");
 			exit(); // fatal error, should quit right away
