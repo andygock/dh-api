@@ -3,9 +3,11 @@
 // Dreamhost API interface
 
 class DreamApi {
+	// don't use this, save your api key in the file ".api_key"
 	private $api_key = "";
+
+	// dreamhost API URL
 	private $api_url = "https://api.dreamhost.com/";
-	
 
 	private $wget = "c:/cygwin64/bin/wget.exe";
 	private $curl = "curl";
@@ -51,6 +53,7 @@ class DreamApi {
 		}
 
 		if ($this->show_exec) {
+			// show use the exec string, used for debugging the script
 			fwrite(STDERR, "EXEC: ".$exec_str."\n");
 		}
 
@@ -63,9 +66,17 @@ class DreamApi {
 			fwrite(STDERR,"API server did not respond.\n");
 			exit();
 		}
+
+		// grab the php formatted server response
 		$result = unserialize($output[0]);
+		if (!$result) {
+			// response is not php format
+			fwrite(STDERR,"Error: API server didn't return a PHP serialized response.\n");
+			exit();
+		}
 
 		if (!isset($result['result'])) {
+			// invalid result from server
 			fwrite(STDERR,"Error: API server didn't return a result field.\n");
 			exit(); // fatal error, should quit right away
 		}
