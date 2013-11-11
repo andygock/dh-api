@@ -5,17 +5,17 @@
 class DreamApi {
 	private $api_key = "";
 	private $api_url = "https://api.dreamhost.com/";
-	private $uuid;
+	
 
-	private $wget = "c:/cygwin/bin/wget.exe";
+	private $wget = "c:/cygwin64/bin/wget.exe";
 	private $curl = "curl";
-	
+
+	private $uuid;
 	private $commands = array();
-	
 	private $debug_level;
-	
 	private $dry_run = false;
-	var $show_exec;
+
+	private $show_exec;
 	
 	private $keys = array('action','action_value','address','contains','filter','filter_on','stop','rank');
 	
@@ -55,7 +55,14 @@ class DreamApi {
 		}
 
 		// execute the command string
+		//echo $exec_str;
 		exec($exec_str, $output);
+
+		// count number of lines of response from system command e.g curl, wget etc
+		if (count($output)==0) {
+			fwrite(STDERR,"API server did not respond.\n");
+			exit();
+		}
 		$result = unserialize($output[0]);
 
 		if (!isset($result['result'])) {
