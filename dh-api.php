@@ -90,6 +90,7 @@ class DreamApi {
 			if (isset($result['reason'])) {
 				fwrite(STDERR,"Error reason: ".$result['reason']."\n");
 			}
+			exit();
 		}
 		return $result;
 	}
@@ -113,6 +114,7 @@ class DreamApi {
 		$result = $this->query(array('cmd'=>'mail-list_filters'));
 		
 		if ($result['result'] != "success") {
+			fwrite(STDERR,"Error: mail-list_filters command failed (result != 'success')\n");
 			exit();
 		}
 		
@@ -152,7 +154,7 @@ class DreamApi {
 					continue;
 				}
 				if (!array_key_exists($check_key,$data) || !array_key_exists($check_key,$d)) {
-					throw new Exception("Invalid function parameter to mail_add_filter(). Key not set.");
+					fwrite(STDERR,"Error: Invalid function parameter to mail_add_filter(). Key not set.\n");
 					exit();
 				}
 				if ($data[$check_key] == $d[$check_key]) {
@@ -178,11 +180,11 @@ class DreamApi {
 				$new_data = array_merge(array('cmd'=>'mail-add_filter'), $new_data);	
 				$result = $this->query($new_data);
 				if (!array_key_exists('result', $result)) {
-					var_dump($result);
-					throw new Exception("mail-add_filter command returned invalid result");
+					fwrite(STDERR,"Error: mail-add_filter command did not return a result\n");
 					exit();
 				}
 				if ($result['result'] != 'success') {
+					fwrite(STDERR,"Error: mail-add_filter result was not 'success'\n");
 					exit();
 				} else {
 					return true;
@@ -199,14 +201,18 @@ class DreamApi {
 				$new_data[$k] = $data[$k];
 			}
 			if (!array_key_exists("rank", $new_data) || !array_key_exists("rank", $data)) {
-				throw new Exception("Missing rank key.");
+				fwrite(STDERR,"Warning: Missing rank key\n");
+				// ok to continue, it should still delete file, without a rank key, i think...
+				//exit();
 			}
 			$new_data = array_merge(array('cmd'=>'mail-remove_filter'), $new_data);
 			$result = $this->query($new_data);
 			if (!array_key_exists('result', $result)) {
-				throw new Exception("mail-add_filter command returned invalid result");
+				fwrite(STDERR,"Error: mail-remove_filter command did not return a result\n");
+				exit();
 			}	
 			if ($result['result'] != 'success') {
+				fwrite(STDERR,"Error: mail-remove_filter result was not 'success'\n");
 				exit();
 			}
 			return true;
@@ -297,17 +303,18 @@ class DreamApi {
 
 		// look for 'add.txt', which contains email filters to add into list.txt
 		if (!is_file('add.txt')) {
-			fwrite(STDERR, "Could not find 'add.txt'\n");
-			return;
+			fwrite(STDERR, "Error: Could not find 'add.txt'\n");
+			exit();
 		}
 
 		$file = @fopen('add.txt','r');
 		if (!$file) {
-			fwrite(STDERR, "Could not open 'add.txt'\n");
-			return;
+			fwrite(STDERR, "Error: Could not open 'add.txt'\n");
+			exit();
 		}
 
-		$email = "";
+		$email = ""; // store "last email address found"
+
 		while( $line = fgets($file) ) {
 			$line = trim($line);
 
@@ -421,20 +428,21 @@ if (array_key_exists("s", $opts) || array_key_exists("sync", $opts)) {
 		if ($fp = fopen("list.txt","r")) {
 			$filename = "list.txt";
 		} else {
-			print "No input filter list or list.txt was supplied. Try using --input=FILE option.\n";
+			fwrite(STDERR, "No input filter list or list.txt was supplied. Try using --input=FILE option.\n");
 			exit();
 		}
 	}
 	
 	if ( !$dream->mail_read_filter_file($filename) ) {
 		// could not read file, error message displayed inside the function
-		exit;
+		fwrite(STDERR, "Error: Could not read filter file '".$filename."'\n");
+		exit();
 	}
 	//$dream->mail_print_filter_file();
 	
 	// sync with both ADD and DELETE
 	if ($dream->is_dry_run()) {
-		print "Dry run...\n";
+		fwrite(STDERR, "Dry run...\n");
 	}
 	fwrite(STDERR, "Reading existing mail filters from remote server...\n");
 	$dream->mail_list_filters();
