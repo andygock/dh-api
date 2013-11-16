@@ -328,6 +328,8 @@ class DreamApi {
 				continue;
 			}
 
+
+
 			// look for email address header
 			$matches = array();
 			if ( preg_match("/^==(.*)==$/", $line, $matches) ) {
@@ -339,14 +341,38 @@ class DreamApi {
 			// format:
 			// account_id=467273|action=move|action_value=spam-filter|address=andy@andygock.com.au|contains=yes|filter=@advertisewithseo.com|filter_on=from|rank=36|stop=yes
 
-			$filter = $line;
-
-			// line must contain a email address (or part of one) to filter, use rank=1
-			// not sure if we need account_id value, i've removed it for now
-
 			if ($email != "") {
-				echo "action=move|action_value=spam-filter|address=".$email."|contains=yes|filter=".$filter."|filter_on=from|rank=1|stop=yes\n";
+
+				if ( preg_match("/^([a-z]+):(.*)/", $line, $matches)) {
+					// filter_on identifier found
+
+					$filter_on = $matches[1];
+					if (!in_array($filter_on, array("from","subject","to","cc","body","reply-to","headers"))) {
+						// not a valid 'filter on' key
+						fwrite(STDERR, "Warning: Invalid key '".$filter_on.":' in 'add.txt', ignoring line.\n");
+						continue;
+					}
+
+					$filter = trim($matches[2]);
+
+				} else {
+					// assume "from:"
+					$filter_on = "from";
+
+					// line must contain a email address (or part of one) to filter, use rank=1
+					// not sure if we need account_id value, i've removed it for now
+
+					$filter = $line;
+					
+				}
+
+				echo "action=move|action_value=spam-filter|address=".$email."|contains=yes|filter=".$filter."|filter_on=".$filter_on."|rank=1|stop=yes\n";
+
 			}
+
+			
+
+
 		}
 
 	}
