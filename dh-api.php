@@ -9,7 +9,8 @@ class DreamApi {
 	// dreamhost API URL
 	private $api_url = "https://api.dreamhost.com/";
 
-	private $wget = "c:/cygwin64/bin/wget.exe";
+	// set defaujlt exec commands for wget and curl
+	private $wget = "wget";
 	private $curl = "curl";
 
 	private $uuid;
@@ -17,7 +18,7 @@ class DreamApi {
 	private $debug_level;
 	private $dry_run = false;
 
-	private $show_exec;
+	public $show_exec;
 	
 	private $keys = array('action','action_value','address','contains','filter','filter_on','stop','rank');
 	
@@ -42,8 +43,8 @@ class DreamApi {
 		// full url to GET
 		$url = "https://api.dreamhost.com/?".http_build_query($data);
 
-		if (strstr(php_uname(),"Darwin")) {
-			// MAC ODS X
+		if (strstr(php_uname(),"Darwin") || strstr(php_uname(),"Linux")) {
+			// MAC ODS X and Linux
 			// use curl
 			$exec_str = $this->curl . " -s '".$url."'";
 		} else {
@@ -328,8 +329,6 @@ class DreamApi {
 				continue;
 			}
 
-
-
 			// look for email address header
 			$matches = array();
 			if ( preg_match("/^==(.*)==$/", $line, $matches) ) {
@@ -338,10 +337,11 @@ class DreamApi {
 				continue;
 			}
 
-			// format:
-			// account_id=467273|action=move|action_value=spam-filter|address=andy@andygock.com.au|contains=yes|filter=@advertisewithseo.com|filter_on=from|rank=36|stop=yes
+			// desired format:
+			// account_id=467273|action=move|action_value=spam-filter|address=andy@andygock.com.au|contains=yes|filter=@advertisewithseo.com|filter_on=from|rank=1|stop=yes
 
 			if ($email != "") {
+				// not a blank line in add.txt
 
 				if ( preg_match("/^([a-z]+):(.*)/", $line, $matches)) {
 					// filter_on identifier found
@@ -370,9 +370,6 @@ class DreamApi {
 
 			}
 
-			
-
-
 		}
 
 	}
@@ -394,16 +391,23 @@ if (count($opts) == 0) {
 
 if (array_key_exists("help", $opts) || array_key_exists("h", $opts)) {
 	// display help message
-	print "dh-api.php [OPTIONS] COMMAND\n";
+	print "Email filter tool using Dreamhost API (by Andy Gock)\n\n";
+	print "Usage:\n";
+	print "\tdh-api.php [OPTIONS] COMMAND\n";
+
 	print "\nCommands:\n";
-	print "\t-s, --sync\n";
-	print "\t-l, --list\n";
-	print "\t-h, --help\n";
+	print "\t-s, --sync    Synchronise 'list.txt' with server filters\n";
+	print "\t-l, --list    List all server filters\n";
+	print "\t--add-to-list Process 'add.txt' and output\n";
+	print "\t-h, --help    This help message\n";
+
 	print "\nOptions:\n";
-	print "\t-i, --input\n";
-	print "\t--dry, --dry-run\n";
-	print "\t--exec\n";
-	print "\t--add-to-list\n";
+	print "\t-i FILE, --input=FILE\n";
+	print "\t                 User specified lsit file\n";
+	print "\t--dry, --dry-run Perform a dummy run\n";
+	print "\t--exec           Display executed command string to stderr\n";
+	print "\t                 e.g wget, curl etc\n";
+	
 	exit();
 }
 
@@ -411,6 +415,7 @@ $dream = new DreamApi();
 
 // Look for API key
 if ($file = fopen(".api_key","r")) {
+	// read api key from this file
 	$key = fgets($file,128);
 	if (!$key) {
 		fwrite(STDERR, "Could not read .api_key\n");
@@ -418,21 +423,27 @@ if ($file = fopen(".api_key","r")) {
 	}		
 	$dream->set_api_key($key);
 } else {
+	// could not find api key
 	fwrite(STDERR, "Could not open .api_key\n");
 	exit();
 }
 
-
 if (array_key_exists("exec", $opts)) {
+	// display executed command to STDERR, for debugging
 	$dream->show_exec = true;
 }
 
 if (array_key_exists("add-to-list", $opts)) {
+	// look for add.txt, and make a formatted list of commands, which can be appended to list.txt
+	// and then synchromised to the server
+	// this add.txt file is easier to write and is useful for adding new entries
 	$dream->add_to_list();
 	exit();
 }
 		
 if (array_key_exists("list", $opts) || array_key_exists("l", $opts)) {
+	// list all server email filters
+	// example usage: dh-api.php --list > list.txt
 	fwrite(STDERR, "Listing existing mail filters from remote server...\n");
 	$dream->mail_list_filters();
 	$dream->mail_print_filters();
@@ -441,20 +452,24 @@ if (array_key_exists("list", $opts) || array_key_exists("l", $opts)) {
 }
 
 if (array_key_exists("dry-run", $opts) || array_key_exists("dry", $opts)) {
+	// perform dummy run of the sync command, but doesn't actually perform any network operations
 	$dream->set_dry_run(true);
 }
 
 if (array_key_exists("s", $opts) || array_key_exists("sync", $opts)) {
+	// perform actual sync, any differences between server filterts and those in list.txt is synced
+	// this includes any additions or deletions required to bring these two into sync
+	// if -i or --input supplied, then user can specify a filename instead of list.txt
 	if (array_key_exists("i", $opts)) {
 		$filename = $opts['i'];
 	} else if (array_key_exists("input", $opts)) {
 		$filename = $opts['input'];
 	} else {
-		// look for 'list.txt'
+		// look for 'list.txt' as defaulty
 		if ($fp = fopen("list.txt","r")) {
 			$filename = "list.txt";
 		} else {
-			fwrite(STDERR, "No input filter list or list.txt was supplied. Try using --input=FILE option.\n");
+			fwrite(STDERR, "No input filter list was supplied and could not find 'list.txt'. Try using --input=FILE option.\n");
 			exit();
 		}
 	}
@@ -477,6 +492,8 @@ if (array_key_exists("s", $opts) || array_key_exists("sync", $opts)) {
 	$dream->mail_sync_filters_delete();
 	$dream->mail_sync_filters_add();
 	fwrite(STDERR, "Completed.\n");
-}
+
+	// all done
+} // sync operation
 
 ?>
