@@ -1,6 +1,21 @@
 <?php
 
 // Dreamhost API interface
+//
+// Typical workflow:
+//
+// 1. Get list file
+//   php dh-api.php --list > list.txt
+// 
+// 2. Edit `add.txt` and appropriate entries as required
+//   vim add.txt
+//
+// 3. Update `list.txt` with new entries
+//   php dh-api.php --add-to-list >> list.txt
+//
+// 4. Sync
+//   php dh-api.php --sync
+//
 
 class DreamApi {
 	// don't use this, save your api key in the file ".api_key"
