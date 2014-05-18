@@ -26,7 +26,7 @@ class DreamApi {
 
 	// set defaujlt exec commands for wget and curl
 	private $wget = "wget";
-	private $curl = "curl";
+	private $curl = "/usr/bin/curl";
 
 	private $uuid;
 	private $commands = array();

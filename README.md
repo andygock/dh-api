@@ -19,7 +19,7 @@ Save the email filters to `list.txt`:
 	
 	php dh-api.php --list > list.txt
 
-Edit list.txt and add or delete filters as required:
+Edit `list.txt` and add or delete filters as required.
 
 Sync the file to the server, first, do a dry run to see what changes would be made
 
