@@ -47,7 +47,7 @@ Format of `add.txt`:
 	# Additions
 	# These add to filter.txt, as email filter in the FROM field
 
-	==andy@andygock.com.au==
-	organichosting
-	groomingtechnologies.com
+	==hello@myemail.com==
+	body:viagra
+	@spammerdomain.com
 
