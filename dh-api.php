@@ -57,14 +57,22 @@ class DreamApi {
 
 		// full url to GET
 		$url = "https://api.dreamhost.com/?".http_build_query($data);
-
-		if (strstr(php_uname(),"Darwin") || strstr(php_uname(),"Linux")) {
-			// MAC ODS X and Linux
-			// use curl
+		
+		// Note:
+		// MAC curl 7.30.0 works
+		// Debian Linux 7: curl 7.26.0 does not work, hangs, not sure why
+		//                 use wget instaed
+		// Windows: Never thoroughly tested, but last time it didn't
+		//          work consistently
+		//if (strstr(php_uname(),"Darwin")) {
+		if (strstr(php_uname(),"Darwin")) {
+			// MAC OS X - use curl
 			$exec_str = $this->curl . " -s '".$url."'";
+		} else if (strstr(php_uname(),"Linux")) {
+			// Linux - use wget
+			$exec_str = $this->wget . " -qO- --no-check-certificate '".$url."'";
 		} else {
-			// Other OS
-			// Use wget
+			// Other OS - use wget
 			$exec_str = $this->wget . " -qO- --no-check-certificate '".$url."'";
 		}
 
@@ -74,9 +82,8 @@ class DreamApi {
 		}
 
 		// execute the command string
-		//echo $exec_str;
 		exec($exec_str, $output);
-
+		
 		// count number of lines of response from system command e.g curl, wget etc
 		if (count($output)==0) {
 			fwrite(STDERR,"API server did not respond.\n");
