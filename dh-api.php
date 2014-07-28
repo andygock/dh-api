@@ -33,7 +33,11 @@ class DreamApi {
 	private $debug_level;
 	private $dry_run = false;
 
-	public $show_exec;
+	public  $show_exec;
+	
+	private $gzip = true;
+	
+	public $force_curl = false;
 	
 	private $keys = array('action','action_value','address','contains','filter','filter_on','stop','rank');
 	
@@ -64,16 +68,33 @@ class DreamApi {
 		//                 use wget instaed
 		// Windows: Never thoroughly tested, but last time it didn't
 		//          work consistently
-		//if (strstr(php_uname(),"Darwin")) {
-		if (strstr(php_uname(),"Darwin")) {
+		
+		if ($this->force_curl == true) {
+			
+			// force use of curl
+			$exec_str = $this->curl . " --compressed -s -3 '".$url."'";
+			
+			// curl automatically gzdecodes it, so we don't need to
+			// decode it later
+			$this->gzip = false;
+			
+		} else if (strstr(php_uname(),"Darwin")) {
 			// MAC OS X - use curl
 			$exec_str = $this->curl . " -s '".$url."'";
 		} else if (strstr(php_uname(),"Linux")) {
 			// Linux - use wget
-			$exec_str = $this->wget . " -qO- --no-check-certificate '".$url."'";
+			if ($this->gzip) {
+				$exec_str = $this->wget . " -qO- --secure-protocol=SSLv3 --no-check-certificate --header='accept-encoding: gzip' '".$url."'";	
+			} else {
+				$exec_str = $this->wget . " -qO- --secure-protocol=SSLv3  --no-check-certificate '".$url."'";	
+			}
 		} else {
 			// Other OS - use wget
-			$exec_str = $this->wget . " -qO- --no-check-certificate '".$url."'";
+			if ($this->gzip) {
+				$exec_str = $this->wget . " -qO- --secure-protocol=SSLv3  --no-check-certificate --header='accept-encoding: gzip' '".$url."'";	
+			} else {
+				$exec_str = $this->wget . " -qO- --secure-protocol=SSLv3  --no-check-certificate '".$url."'";	
+			}
 		}
 
 		if ($this->show_exec) {
@@ -82,16 +103,29 @@ class DreamApi {
 		}
 
 		// execute the command string
-		exec($exec_str, $output);
+		if ($this->gzip) {
+			// server gzip compression
+			// we realy should check server response headers to see
+            // whether response is actuall gzipped
+
+            exec($exec_str . " | gzip -dc", $output);
 		
-		// count number of lines of response from system command e.g curl, wget etc
-		if (count($output)==0) {
-			fwrite(STDERR,"API server did not respond.\n");
-			exit();
+			// if gzdecode() fails, perhaps we should try standard unserialize?
+			// @todo
+		} else {
+			// no server gzip compression
+			exec($exec_str, $output);
 		}
 
-		// grab the php formatted server response
-		$result = unserialize($output[0]);
+        // count number of lines of response from system command e.g curl, wget etc
+        if (count($output)==0) {
+            fwrite(STDERR,"API server did not respond.\n");
+            exit();
+        }
+
+        // grab the php formatted server response
+        $result = unserialize($output[0]);
+		
 		if (!$result) {
 			// response is not php format
 			fwrite(STDERR,"Error: API server didn't return a PHP serialized response.\n");
@@ -402,7 +436,7 @@ class DreamApi {
 // SCRIPT STARTS HERE
 
 // command line options
-$opts = getopt("li:sh",array("list","input:","sync","dry-run","dry","exec","help","add-to-list"));
+$opts = getopt("li:sh",array("list","input:","sync","dry-run","dry","curl","exec","help","add-to-list"));
 
 //var_dump($opts);
 
@@ -418,6 +452,7 @@ if (array_key_exists("help", $opts) || array_key_exists("h", $opts)) {
 	print "\tdh-api.php [OPTIONS] COMMAND\n";
 
 	print "\nCommands:\n";
+	print "\t--curl        Force use of curl\n";
 	print "\t-s, --sync    Synchronise 'list.txt' with server filters\n";
 	print "\t-l, --list    List all server filters\n";
 	print "\t--add-to-list Process 'add.txt' and output\n";
@@ -449,6 +484,12 @@ if ($file = fopen(".api_key","r")) {
 	fwrite(STDERR, "Could not open .api_key\n");
 	exit();
 }
+
+if (array_key_exists("curl", $opts)) {
+	// force use of curl (instead of wget)
+	$dream->force_curl = true;
+}
+
 
 if (array_key_exists("exec", $opts)) {
 	// display executed command to STDERR, for debugging
