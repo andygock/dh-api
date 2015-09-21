@@ -80,7 +80,8 @@ class DreamApi {
 			
 		} else if (strstr(php_uname(),"Darwin")) {
 			// MAC OS X - use curl
-			$exec_str = $this->curl . " -s '".$url."'";
+			$exec_str = $this->curl . " --compressed -s '".$url."'";
+            $this->gzip = false; // curl will decompress already
 		} else if (strstr(php_uname(),"Linux")) {
 			// Linux - use wget
 			if ($this->gzip) {
