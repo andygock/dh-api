@@ -33,7 +33,7 @@ class DreamApi {
 	private $debug_level;
 	private $dry_run = false;
 
-	public  $show_exec;
+	public  $show_exec = false;
 	
 	private $gzip = true;
 	
@@ -72,7 +72,7 @@ class DreamApi {
 		if ($this->force_curl == true) {
 			
 			// force use of curl
-			$exec_str = $this->curl . " --compressed -s -3 '".$url."'";
+			$exec_str = $this->curl . " --compressed -s '".$url."'";
 			
 			// curl automatically gzdecodes it, so we don't need to
 			// decode it later
@@ -84,16 +84,16 @@ class DreamApi {
 		} else if (strstr(php_uname(),"Linux")) {
 			// Linux - use wget
 			if ($this->gzip) {
-				$exec_str = $this->wget . " -qO- --secure-protocol=SSLv3 --no-check-certificate --header='accept-encoding: gzip' '".$url."'";	
+				$exec_str = $this->wget . " -qO- --no-check-certificate --header='accept-encoding: gzip' '".$url."'";	
 			} else {
-				$exec_str = $this->wget . " -qO- --secure-protocol=SSLv3  --no-check-certificate '".$url."'";	
+				$exec_str = $this->wget . " -qO- --no-check-certificate '".$url."'";	
 			}
 		} else {
 			// Other OS - use wget
 			if ($this->gzip) {
-				$exec_str = $this->wget . " -qO- --secure-protocol=SSLv3  --no-check-certificate --header='accept-encoding: gzip' '".$url."'";	
+				$exec_str = $this->wget . " -qO- --no-check-certificate --header='accept-encoding: gzip' '".$url."'";	
 			} else {
-				$exec_str = $this->wget . " -qO- --secure-protocol=SSLv3  --no-check-certificate '".$url."'";	
+				$exec_str = $this->wget . " -qO- --no-check-certificate '".$url."'";	
 			}
 		}
 
@@ -464,6 +464,21 @@ if (array_key_exists("help", $opts) || array_key_exists("h", $opts)) {
 	print "\t--dry, --dry-run Perform a dummy run\n";
 	print "\t--exec           Display executed command string to stderr\n";
 	print "\t                 e.g wget, curl etc\n";
+	
+    print "\nTypical workflow:\n\n";
+
+	print "1. Get list file\n";
+	print "     php dh-api.php --list > list.txt\n";
+	print "\n";
+	print "2. Edit `add.txt` and appropriate entries as required\n";
+	print "     vim add.txt\n";
+	print "\n";
+	print "3. Update `list.txt` with new entries\n";
+	print "     php dh-api.php --add-to-list >> list.txt\n";
+	print "\n";
+	print "4. Sync\n";
+	print "     php dh-api.php --sync\n";
+	print "\n";
 	
 	exit();
 }
