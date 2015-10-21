@@ -440,7 +440,7 @@ class DreamApi {
 // SCRIPT STARTS HERE
 
 // command line options
-$opts = getopt("li:sh",array("list","input:","sync","dry-run","dry","curl","exec","help","add-to-list"));
+$opts = getopt("ali:sh",array("list","input:","sync","dry-run","dry","curl","exec","help","add-to-list"));
 
 //var_dump($opts);
 
