@@ -2,12 +2,12 @@
 
 A Dreamhost API PHP script used for bulk editing of email filters.
 
-There is no real convenient way of adding email filters by the web panel interface, as it is pretty much limited to one addition at a time via a web form. This was written to solve this problem. This is essential to manage spam filters which may have lots of entries.
+There is currently no real convenient way of adding email filters by the web panel interface, as it is pretty much limited to one addition at a time via a web form. This was written to solve this problem. This can be used to manage spam filters which may have lots of entries.
 
 ### How to use:
 
-* Create a file `.api_key` with your API key inside.
-* In Dreamhost panel, you must have email filters added to your API key access rules
+* Create a file `.api_key` with your API key inside. This should be in the same directory as the script `dh-api.php`
+* In Dreamhost panel, you must have email filters added to your API key access rules.
 
 ## Examples of usage
 
@@ -21,11 +21,11 @@ Save the email filters to `list.txt`:
 
 Edit `list.txt` and add or delete filters as required.
 
-Sync the file to the server, first, do a dry run to see what changes would be made
+Sync the file to the server, first, do a dry run to see what changes would be made:
 
 	php dh-api.php --sync --dry
 
-Actually perform the sync:
+Now, perform the sync process:
 
 	php dh-api.php --sync
 
@@ -44,10 +44,23 @@ Quick add of email filters (must have `add.txt`):
 
 Format of `add.txt`:
 
-	# Additions
-	# These add to filter.txt, as email filter in the FROM field
-
 	==hello@myemail.com==
 	body:viagra
 	@spammerdomain.com
+
+	==another@email.com==
+	body:Lottery
+	@annoyingseoperson.com
+	@cheapmedicine.com
+
+By default, the From field is used as the matching field.
+
+You can use a prefix to specify rules for matching other fields, such as:
+
+* `subject`
+* `to`
+* `cc`
+* `body`
+* `reply-to`
+* `headers`
 

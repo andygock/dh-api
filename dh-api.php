@@ -13,7 +13,10 @@
 // 3. Update `list.txt` with new entries
 //   php dh-api.php --add-to-list >> list.txt
 //
-// 4. Sync
+// 4. Dry run sync
+//   php dh-api.php --dry-run --sync
+//
+// 5. Sync
 //   php dh-api.php --sync
 //
 
@@ -395,7 +398,7 @@ class DreamApi {
 			}
 
 			// desired format:
-			// account_id=467273|action=move|action_value=spam-filter|address=andy@andygock.com.au|contains=yes|filter=@advertisewithseo.com|filter_on=from|rank=1|stop=yes
+			// account_id=XXXXXX|action=move|action_value=spam-filter|address=YOUR@EMAIL.COM|contains=yes|filter=@advertisewithseo.com|filter_on=from|rank=1|stop=yes
 
 			if ($email != "") {
 				// not a blank line in add.txt
@@ -448,23 +451,23 @@ if (count($opts) == 0) {
 
 if (array_key_exists("help", $opts) || array_key_exists("h", $opts)) {
 	// display help message
-	print "Email filter tool using Dreamhost API (by Andy Gock)\n\n";
+	print "Email filter tool using Dreamhost API\n\n";
 	print "Usage:\n";
 	print "\tdh-api.php [OPTIONS] COMMAND\n";
 
 	print "\nCommands:\n";
-	print "\t--curl        Force use of curl\n";
-	print "\t-s, --sync    Synchronise 'list.txt' with server filters\n";
-	print "\t-l, --list    List all server filters\n";
-	print "\t--add-to-list Process 'add.txt' and output\n";
-	print "\t-h, --help    This help message\n";
+	print "\t--curl            Force use of curl\n";
+	print "\t-s, --sync        Synchronise 'list.txt' with server filters\n";
+	print "\t-l, --list        List all server filters\n";
+	print "\t-a, --add-to-list Process 'add.txt' and output\n";
+	print "\t-h, --help        This help message\n";
 
 	print "\nOptions:\n";
 	print "\t-i FILE, --input=FILE\n";
-	print "\t                 User specified lsit file\n";
-	print "\t--dry, --dry-run Perform a dummy run\n";
-	print "\t--exec           Display executed command string to stderr\n";
-	print "\t                 e.g wget, curl etc\n";
+	print "\t                  User specified list file\n";
+	print "\t--dry, --dry-run  Perform a dummy run\n";
+	print "\t--exec            Display executed command string to stderr\n";
+	print "\t                    e.g wget, curl etc\n";
 	
     print "\nTypical workflow:\n\n";
 
@@ -477,17 +480,19 @@ if (array_key_exists("help", $opts) || array_key_exists("h", $opts)) {
 	print "3. Update `list.txt` with new entries\n";
 	print "     php dh-api.php --add-to-list >> list.txt\n";
 	print "\n";
-	print "4. Sync\n";
-	print "     php dh-api.php --sync\n";
+	print "4. Dry run sync\n";
+	print "     php dh-api.php --dry-run --sync\n";
 	print "\n";
-	
+	print "5. Sync\n";
+	print "     php dh-api.php --sync\n";
+	print "\n";	
 	exit();
 }
 
 $dream = new DreamApi();
 
 // Look for API key
-if ($file = fopen(".api_key","r")) {
+if ($file = fopen(__DIR__."/.api_key","r")) {
 	// read api key from this file
 	$key = fgets($file,128);
 	if (!$key) {
@@ -512,7 +517,7 @@ if (array_key_exists("exec", $opts)) {
 	$dream->show_exec = true;
 }
 
-if (array_key_exists("add-to-list", $opts)) {
+if (array_key_exists("add-to-list", $opts) || array_key_exists("a", $opts)) {
 	// look for add.txt, and make a formatted list of commands, which can be appended to list.txt
 	// and then synchromised to the server
 	// this add.txt file is easier to write and is useful for adding new entries
